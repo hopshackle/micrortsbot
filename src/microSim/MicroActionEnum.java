@@ -18,7 +18,8 @@ public class MicroActionEnum implements ActionEnum<MicroAgent> {
         ATTACK;
     }
 
-    private static ActionType[] rtsTypeToOurs = {ActionType.NONE, ActionType.MOVE, ActionType.HARVEST, ActionType.PRODUCE, ActionType.ATTACK};
+    private static ActionType[] rtsTypeToOurs = {ActionType.NONE, ActionType.MOVE, ActionType.HARVEST,
+            ActionType.RETURN, ActionType.PRODUCE, ActionType.ATTACK};
 
     private ActionType type;
     private UnitAction underlyingUnitAction;
@@ -36,9 +37,10 @@ public class MicroActionEnum implements ActionEnum<MicroAgent> {
         return underlyingUnitAction;
     }
 
-    public PlayerAction getPlayerAction(Unit u) {
+    public PlayerAction getPlayerAction(Unit u, GameState gs) {
         PlayerAction retValue = new PlayerAction();
         retValue.addUnitAction(u, underlyingUnitAction);
+ //       retValue.setResourceUsage(underlyingUnitAction.resourceUsage(u, gs.getPhysicalGameState()));
         return retValue;
     }
 

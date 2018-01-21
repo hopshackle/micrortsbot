@@ -17,10 +17,19 @@ public class MicroAction extends Action<MicroAgent> {
         this(actionEnum, agent, 0, actionEnum.ETA(agent), false);
     }
 
+    @Override
     public void doStuff() {
         // Only when the MicroAction is executed do we incorporate the Assignment into the GameState
         MicroActionEnum type = (MicroActionEnum) getType();
-        PlayerAction pa = type.getPlayerAction(actor.getUnit());
-        actor.getGameState().issue(pa);
+        PlayerAction pa = type.getPlayerAction(actor.getUnit(), actor.getGameState());
+        boolean success = actor.getGameState().issue(pa);
+   //     actor.getGame().log(String.format("Issued action %s, %s", pa.toString(), success));
+  //      actor.getGame().log(String.format("Expected resource usage: %s", type.getUnitAction().resourceUsage(actor.getUnit(), actor.getGameState().getPhysicalGameState())));
+   //     actor.getGame().log(String.format("GameState ResourceUsage: %s", actor.getGameState().getResourceUsage().toString()));
+    }
+
+    @Override
+    public void doNextDecision() {
+        // do nothing - all controlled from Game
     }
 }

@@ -13,6 +13,7 @@ import rts.units.Unit;
 public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
 
     private static AtomicInteger idFountain = new AtomicInteger(1);
+    protected static SimpleGameScoreCalculator simpleGameScoreCalculator = new SimpleGameScoreCalculator();
     private int id = idFountain.getAndIncrement();
     private GameState underlyingGameState;
     private Map<Long, Integer> unitIDToActorNumber;
@@ -21,53 +22,17 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     private List<MicroAgent> allActors;
     private int currentActorIndex;
     private int nextUnitNumber = 1;
-    private World world = new World();
 
-    public MicroGame(GameState gs, int currentPlayer) {
+    public MicroGame(GameState gs) {
         underlyingGameState = gs;
         unitIDToActorNumber = new HashMap();
+        actorNumberToPlayer = new HashMap();
         allActors = new ArrayList();
-        for (Unit u : underlyingGameState.getUnits()) {
-            allActors.add(new MicroAgent(world, this, u));
-            unitIDToActorNumber.put(u.getID(), nextUnitNumber);
-            actorNumberToPlayer.put(nextUnitNumber, u.getPlayer());
-            nextUnitNumber++;
+        resetCurrentActors();
+        scoreCalculator = new MicroGameScorer();
+        if (debug) {
+            log(String.format("MicroGame created with %d starting units", nextUnitNumber-1));
         }
-        orderOfAction = sortPlayersIntoDecisionOrder(currentPlayer);
-        currentActorIndex = 0;
-        if (orderOfAction.isEmpty()) {
-            throw new AssertionError("No actors to act in gameState");
-        }
-    }
-
-    /*
-    Sorts all ActorNumbers into the order in which they should decide. This starts with all Actors linked
-    to the current player, and then those for the opponent.
-     */
-    private List<Integer> sortPlayersIntoDecisionOrder(int currentPlayer) {
-        List<Integer> playerNumbersInUse = new ArrayList();
-        for (int i : actorNumberToPlayer.keySet()) {
-            playerNumbersInUse.add(i);
-        }
-        Collections.sort(playerNumbersInUse, new Comparator<Integer>() {
-            @Override
-            public int compare(Integer o1, Integer o2) {
-                int differentPlayers = actorNumberToPlayer.get(o1) - actorNumberToPlayer.get(o2);
-                switch (differentPlayers) {
-                    case 0: // is usual order within a player
-                        return o1 - o2;
-                    case 1:
-                    case -1:
-                        if (actorNumberToPlayer.get(o1) == currentPlayer)
-                            return -1;
-                        if (actorNumberToPlayer.get(o2) == currentPlayer)
-                            return 1;
-                    default:
-                        throw new AssertionError("Unexpected player difference for " + actorNumberToPlayer.get(o1)  + " against " + actorNumberToPlayer.get(o2));
-                }
-            }
-        });
-        return playerNumbersInUse;
     }
 
     public GameState getGameState() {
@@ -76,8 +41,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
 
     @Override
     public Game<MicroAgent, MicroActionEnum> clone(MicroAgent perspectivePlayer) {
-        return null;
-        // TODO: implement
+        throw new AssertionError("Cloning not yet implemented");
     }
 
     @Override
@@ -88,7 +52,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     @Override
     public MicroAgent getCurrentPlayer() {
         int actorNumber = getCurrentPlayerNumber();
-        return allActors.get(actorNumber);
+        return allActors.get(actorNumber - 1);
     }
 
     @Override
@@ -109,6 +73,8 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
 
     @Override
     public int getCurrentPlayerNumber() {
+        if (orderOfAction == null)
+            return 1;
         return orderOfAction.get(currentActorIndex);
     }
 
@@ -117,9 +83,21 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         List<ActionEnum<MicroAgent>> retValue = new ArrayList();
         Unit u = player.getUnit();
         List<PlayerAction> actions = underlyingGameState.getPlayerActionsSingleUnit(u.getPlayer(), u);
+        if (actions.size() == 1 && actions.get(0).isEmpty()) {
+            // this is an empty playerAction, which means that this unit is executing an action
+            // and cannot make another decision
+            return retValue;
+        }
         for (PlayerAction action : actions) {
             UnitAction ua = action.getAction(u);
             retValue.add(new MicroActionEnum(ua));
+        }
+        if (debug) {
+            StringBuilder message = new StringBuilder(String.format("Possible actions for actor %d : %s are:\n", getPlayerNumber(player), player.toString()));
+            for (PlayerAction action : actions) {
+                message.append(String.format("\t%s (%s)\n", action.toString(), action.getResourceUsage()));
+            }
+            log(message.toString());
         }
         return retValue;
     }
@@ -139,8 +117,83 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         cycle forward the GameState to a point at which another decision is required. This
         will also reset the list of which actors need to make a decision.
         However, we want to retain a firm link between actorNumber and the Unit.ID.
-        Hence new Units not previously seen before are ascribed new actorNumbers, without chnagign the old ones.
+        Hence new Units not previously seen before are ascribed new actorNumbers, without changing the old ones.
         If a unit has died, then we will simply not see it again - so there is no need to remove its MicroAgent.
          */
+
+        currentActorIndex++;
+        if (currentActorIndex >= orderOfAction.size()) {
+            // we have finished all decisions
+            boolean gameOver = false;
+            do {
+                gameOver = underlyingGameState.cycle();
+                setTime(underlyingGameState.getTime());
+                if (debug) {
+                    log(String.format("Moving time on by one tick to %d", underlyingGameState.getTime()));
+                    log(String.format("GameState ResourceUsage: %s", getGameState().getResourceUsage().toString()));
+                }
+            } while (!gameOver && underlyingGameState.getNextChangeTime() > underlyingGameState.getTime());
+            resetCurrentActors();
+        } else {
+            // no need to do anything other than increment the currentActorIndex
+            if (debug) {
+                int actorNumber = orderOfAction.get(currentActorIndex);
+                log(String.format("Next decision from %d : %s", currentActorIndex, allActors.get(actorNumber - 1)));
+            }
+        }
+    }
+
+    private void resetCurrentActors() {
+        for (Unit u : underlyingGameState.getUnits()) {
+            if (u.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
+            if (!unitIDToActorNumber.containsKey(u.getID())) {
+                // a new unit that we need to track
+                allActors.add(new MicroAgent(getWorld(), this, u));
+                unitIDToActorNumber.put(u.getID(), nextUnitNumber);
+                actorNumberToPlayer.put(nextUnitNumber, u.getPlayer());
+                if (debug) {
+                    log(String.format("Added new actor %d : %s", nextUnitNumber, getPlayer(nextUnitNumber)));
+                }
+                nextUnitNumber++;
+            }
+        }
+        orderOfAction = sortPlayersIntoDecisionOrder();
+        currentActorIndex = 0;
+        if (orderOfAction.isEmpty()) {
+            throw new AssertionError("No actors to act in gameState");
+        }
+    }
+
+    /*
+Sorts all ActorNumbers into the order in which they should decide. This starts with all Actors linked
+to the current player, and then those for the opponent.
+ */
+    private List<Integer> sortPlayersIntoDecisionOrder() {
+        List<Integer> actorNumbersInUse = new ArrayList();
+        List<Unit> activeUnits = underlyingGameState.getUnits();
+        for (Unit activeUnit : activeUnits) {
+            if (activeUnit.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
+            long id = activeUnit.getID();
+            int actorNumber = unitIDToActorNumber.get(id);
+            if (!getPossibleActions(allActors.get(actorNumber-1)).isEmpty())
+                actorNumbersInUse.add(actorNumber);
+        }
+
+        Collections.sort(actorNumbersInUse, new Comparator<Integer>() {
+            @Override
+            public int compare(Integer o1, Integer o2) {
+                int differentPlayers = actorNumberToPlayer.get(o1) - actorNumberToPlayer.get(o2);
+                switch (differentPlayers) {
+                    case 0: // is usual order within a player
+                        return o1 - o2;
+                    case 1:
+                    case -1:
+                        return differentPlayers;
+                    default:
+                        throw new AssertionError("Unexpected player difference for " + actorNumberToPlayer.get(o1) + " against " + actorNumberToPlayer.get(o2));
+                }
+            }
+        });
+        return actorNumbersInUse;
     }
 }

@@ -1,6 +1,8 @@
 package bots;
 
 import ai.core.*;
+import hopshackle.simulation.HopshackleUtilities;
+import microSim.MicroGame;
 import rts.*;
 import rts.units.*;
 import util.*;
@@ -9,11 +11,11 @@ import java.util.*;
 
 public class BasicBot extends AIWithComputationBudget {
 
-    public BasicBot(int mt, int mi)  {
+    public BasicBot(int mt, int mi) {
         super(mt, mi);
     }
 
-    public BasicBot() {
+    public BasicBot(UnitTypeTable utt) {
         super(100, 0);
     }
 
@@ -24,19 +26,19 @@ public class BasicBot extends AIWithComputationBudget {
 
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
-        try {
-            if (!gs.canExecuteAnyAction(player)) return new PlayerAction();
-            PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
-            for (Pair<Unit,List<UnitAction>> option : pag.getChoices()) {
-                System.out.println(option.toString());
-            }
-            return pag.getRandom();
-        }catch(Exception e) {
-            // The only way the player action generator returns an exception is if there are no units that
-            // can execute actions, in this case, just return an empty action:
-            // However, this should never happen, since we are checking for this at the beginning
-            return new PlayerAction();
+        if (!gs.canExecuteAnyAction(player)) return new PlayerAction();
+        PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
+        for (Pair<Unit, List<UnitAction>> option : pag.getChoices()) {
+            System.out.println(option.toString());
         }
+
+        long start  = System.currentTimeMillis();
+        MicroGame mg = new MicroGame(gs.clone());
+        double[] result = mg.playGame();
+        System.out.println("Time taken: " + (System.currentTimeMillis() - start));
+        System.out.println(HopshackleUtilities.formatArray(result, ", ", "%.2f"));
+
+        return pag.getRandom();
     }
 
     @Override
