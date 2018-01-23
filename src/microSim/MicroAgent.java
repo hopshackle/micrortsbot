@@ -13,11 +13,16 @@ public class MicroAgent extends Agent {
     private MicroGame game;
     private static OpenLoopStateFactory<MicroAgent> openLoopFactory = OpenLoopStateFactory.newInstanceGameLevelStates();
 
-    public MicroAgent(World world, MicroGame game, Unit unit) {
-        super(world);
+    public MicroAgent(MicroGame game, Unit unit) {
+        super(game.getWorld());
         this.unit = unit;
         this.game = game;
         setDecider(new RandomDecider(openLoopFactory));
+    }
+
+    public MicroAgent clone(MicroGame g) {
+        Unit clonedUnit = getGameState().getUnit(this.unit.getID());
+        return new MicroAgent(g, clonedUnit);
     }
 
     public Unit getUnit() {

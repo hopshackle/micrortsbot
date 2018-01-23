@@ -13,7 +13,6 @@ import rts.units.Unit;
 public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
 
     private static AtomicInteger idFountain = new AtomicInteger(1);
-    protected static SimpleGameScoreCalculator simpleGameScoreCalculator = new SimpleGameScoreCalculator();
     private int id = idFountain.getAndIncrement();
     private GameState underlyingGameState;
     private Map<Long, Integer> unitIDToActorNumber;
@@ -31,9 +30,26 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         resetCurrentActors();
         scoreCalculator = new MicroGameScorer();
         if (debug) {
-            log(String.format("MicroGame created with %d starting units", nextUnitNumber-1));
+            log(String.format("MicroGame created with %d starting units", nextUnitNumber - 1));
         }
     }
+
+    private MicroGame(MicroGame master) {
+        underlyingGameState = master.underlyingGameState.clone();
+        currentActorIndex = master.currentActorIndex;
+        nextUnitNumber = master.nextUnitNumber;
+        unitIDToActorNumber = HopshackleUtilities.cloneMap(master.unitIDToActorNumber);
+        actorNumberToPlayer = HopshackleUtilities.cloneMap(master.actorNumberToPlayer);
+        allActors = new ArrayList();
+        for (MicroAgent p : master.allActors) {
+            long id = p.getUnit().getID();
+            MicroAgent newAgent = new MicroAgent(this, underlyingGameState.getPhysicalGameState().getUnit(id));
+            allActors.add(newAgent);
+        }
+        scoreCalculator = master.scoreCalculator;
+        resetCurrentActors();
+    }
+
 
     public GameState getGameState() {
         return underlyingGameState;
@@ -41,7 +57,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
 
     @Override
     public Game<MicroAgent, MicroActionEnum> clone(MicroAgent perspectivePlayer) {
-        throw new AssertionError("Cloning not yet implemented");
+        return new MicroGame(this);
     }
 
     @Override
@@ -133,7 +149,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
                     log(String.format("GameState ResourceUsage: %s", getGameState().getResourceUsage().toString()));
                 }
             } while (!gameOver && underlyingGameState.getNextChangeTime() > underlyingGameState.getTime());
-            resetCurrentActors();
+            if (!gameOver) resetCurrentActors();
         } else {
             // no need to do anything other than increment the currentActorIndex
             if (debug) {
@@ -148,7 +164,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
             if (u.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
             if (!unitIDToActorNumber.containsKey(u.getID())) {
                 // a new unit that we need to track
-                allActors.add(new MicroAgent(getWorld(), this, u));
+                allActors.add(new MicroAgent(this, u));
                 unitIDToActorNumber.put(u.getID(), nextUnitNumber);
                 actorNumberToPlayer.put(nextUnitNumber, u.getPlayer());
                 if (debug) {
@@ -171,13 +187,16 @@ to the current player, and then those for the opponent.
     private List<Integer> sortPlayersIntoDecisionOrder() {
         List<Integer> actorNumbersInUse = new ArrayList();
         List<Unit> activeUnits = underlyingGameState.getUnits();
+        boolean mainDebug = debug;
+        debug = false;
         for (Unit activeUnit : activeUnits) {
             if (activeUnit.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
             long id = activeUnit.getID();
             int actorNumber = unitIDToActorNumber.get(id);
-            if (!getPossibleActions(allActors.get(actorNumber-1)).isEmpty())
+            if (!getPossibleActions(allActors.get(actorNumber - 1)).isEmpty())
                 actorNumbersInUse.add(actorNumber);
         }
+        debug = mainDebug;      // to switch off logging when we call getPossibleActions()
 
         Collections.sort(actorNumbersInUse, new Comparator<Integer>() {
             @Override
@@ -195,5 +214,10 @@ to the current player, and then those for the opponent.
             }
         });
         return actorNumbersInUse;
+    }
+
+    @Override
+    public String toString() {
+        return "MicroGame_" + String.valueOf(id);
     }
 }

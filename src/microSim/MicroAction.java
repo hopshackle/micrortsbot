@@ -29,7 +29,8 @@ public class MicroAction extends Action<MicroAgent> {
     }
 
     @Override
-    public void doNextDecision() {
+    public void doNextDecision(MicroAgent a) {
         // do nothing - all controlled from Game
+        // we do not override doNextDecision() so that learning event is still dispatched
     }
 }
