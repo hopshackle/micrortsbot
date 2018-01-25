@@ -61,12 +61,10 @@ public class BasicBot extends AIWithComputationBudget {
         boolean finished = false;
         do {
             MCStatistics<MicroAgent> stats = tree.getStatisticsFor(stateAsString);
-            int actorRef = stats.getActorRef();
-            Unit actingUnit = game.getPlayer(actorRef).getUnit();
-            MicroActionEnum action = (MicroActionEnum) tree.getBestAction(fromState, stats.getPossibleActions(), actorRef);
-            int pID = actingUnit.getPlayer();
+            int pID = stats.getActorRef();
             if (playerID == pID) {
-                PlayerAction playerAction = action.getPlayerAction(actingUnit, game.getGameState());
+                MicroActionEnum action = (MicroActionEnum) tree.getBestAction(fromState, stats.getPossibleActions(), pID);
+                PlayerAction playerAction = action.getPlayerAction(action.getUnitAction(), game.getGameState());
                 // GameState can (I think) be the initial GameState before executing any actions
                 // All it will not include are the other moves made...but that's covered in the Merge
                 retValue = retValue.merge(playerAction);

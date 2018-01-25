@@ -40,7 +40,13 @@ public class MicroAgent extends Agent {
 
     @Override
     public String toString() {
+        if (isPlayer())
+            return String.format("Player [%d]", getUniqueID());
         return String.format("%s [%d]", unit.toString(), getUniqueID());
+    }
+
+    public boolean isPlayer() {
+        return unit == null;
     }
 
 }

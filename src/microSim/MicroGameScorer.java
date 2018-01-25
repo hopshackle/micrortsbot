@@ -19,29 +19,20 @@ public class MicroGameScorer implements GameScoreCalculator {
 
     @Override
     public double[] finalScores(Game game) {
-        // We need to get the score for each player, and put this into the array
-        // at the position for all MicroAgents with that playerID
-        List<MicroAgent> allAgents = game.getAllPlayers();
-        double[] retValue = new double[allAgents.size()];
+        // we just determine who won, and set up the array.
+        double[] retValue = new double[2];
         if (game instanceof MicroGame) {
             MicroGame microGame = (MicroGame) game;
             GameState gs = microGame.getGameState();
             if (gs.gameover()) {
                 int winner = gs.winner();
-                for (int i = 0; i < retValue.length; i++) {
-                    int p = allAgents.get(i).getUnit().getPlayer();
-                    if (p == winner) {
-                        retValue[i] = WIN_SCORE;
-                    } else {
-                        retValue[i] = -WIN_SCORE;
-                    }
-                }
+                retValue[winner] = WIN_SCORE;
+                retValue[1 - winner] = -WIN_SCORE;
             } else {
-                int winner = gs.winner();
-                for (int i = 0; i < retValue.length; i++) {
-                    int p = allAgents.get(i).getUnit().getPlayer();
-                    int opponent = (p == 0) ? 1 : 0;
-                    retValue[i] = valueFunction.evaluate(p, opponent, gs);
+                for (int i = 0; i < 2; i++) {
+                    retValue[i] = valueFunction.evaluate(i, 1 - i, gs);
+                    if (retValue[i] > 0.80 * WIN_SCORE) retValue[i] = 0.8 * WIN_SCORE;
+                    if (retValue[i] < -0.80 * WIN_SCORE) retValue[i] = -0.8 * WIN_SCORE;
                 }
             }
         } else {

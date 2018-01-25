@@ -18,33 +18,42 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     private Map<Long, Integer> unitIDToActorNumber;
     private Map<Integer, Integer> actorNumberToPlayer;
     private List<Integer> orderOfAction;
-    private List<MicroAgent> allActors;
     private int currentActorIndex;
-    private int nextUnitNumber = 1;
+    private int nextActorNumber = 1;
 
     public MicroGame(GameState gs) {
         underlyingGameState = gs;
         unitIDToActorNumber = new HashMap();
         actorNumberToPlayer = new HashMap();
-        allActors = new ArrayList();
+        setUpMasters();
         resetCurrentActors();
         scoreCalculator = new MicroGameScorer();
         if (debug) {
-            log(String.format("MicroGame created with %d starting units", nextUnitNumber - 1));
+            log(String.format("MicroGame created with %d starting units", nextActorNumber - 1));
+        }
+    }
+
+    private void setUpMasters() {
+        // we hardcode two masters, but do not add them to players - as for the moment they never act
+        for (int i = 0; i < 2; i++) {
+            MicroAgent player = new MicroAgent(this, null);
+            masters.add(player);
         }
     }
 
     private MicroGame(MicroGame master) {
         underlyingGameState = master.underlyingGameState.clone();
         currentActorIndex = master.currentActorIndex;
-        nextUnitNumber = master.nextUnitNumber;
+        nextActorNumber = master.nextActorNumber;
         unitIDToActorNumber = HopshackleUtilities.cloneMap(master.unitIDToActorNumber);
         actorNumberToPlayer = HopshackleUtilities.cloneMap(master.actorNumberToPlayer);
-        allActors = new ArrayList();
-        for (MicroAgent p : master.allActors) {
+        setUpMasters();
+        for (MicroAgent p : master.players) {
             long id = p.getUnit().getID();
             MicroAgent newAgent = new MicroAgent(this, underlyingGameState.getPhysicalGameState().getUnit(id));
-            allActors.add(newAgent);
+            players.add(newAgent);
+            MicroAgent masterAgent = masters.get(p.getUnit().getPlayer());
+            masterAgents.put(newAgent, masterAgent);
         }
         scoreCalculator = master.scoreCalculator;
         resetCurrentActors();
@@ -68,23 +77,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     @Override
     public MicroAgent getCurrentPlayer() {
         int actorNumber = getCurrentPlayerNumber();
-        return allActors.get(actorNumber - 1);
-    }
-
-    @Override
-    public List<MicroAgent> getAllPlayers() {
-        return allActors;
-    }
-
-    @Override
-    public int getPlayerNumber(MicroAgent player) {
-        int actorNumber = allActors.indexOf(player);
-        return actorNumber + 1;
-    }
-
-    @Override
-    public MicroAgent getPlayer(int n) {
-        return allActors.get(n - 1);
+        return players.get(actorNumber - 1);
     }
 
     @Override
@@ -154,7 +147,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
             // no need to do anything other than increment the currentActorIndex
             if (debug) {
                 int actorNumber = orderOfAction.get(currentActorIndex);
-                log(String.format("Next decision from %d : %s", currentActorIndex, allActors.get(actorNumber - 1)));
+                log(String.format("Next decision from %d : %s", currentActorIndex, players.get(actorNumber - 1)));
             }
         }
     }
@@ -164,13 +157,19 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
             if (u.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
             if (!unitIDToActorNumber.containsKey(u.getID())) {
                 // a new unit that we need to track
-                allActors.add(new MicroAgent(this, u));
-                unitIDToActorNumber.put(u.getID(), nextUnitNumber);
-                actorNumberToPlayer.put(nextUnitNumber, u.getPlayer());
+                MicroAgent newAgent = new MicroAgent(this, u);
+                players.add(newAgent);
+                MicroAgent master = masters.get(u.getPlayer());
+                masterAgents.put(newAgent, master);
+                // then set parent - this will trigger a BIRTH event
+                newAgent.addParent(master);
+                // uses convention that masters contains the two PLayers in correct order
+                unitIDToActorNumber.put(u.getID(), nextActorNumber);
+                actorNumberToPlayer.put(nextActorNumber, u.getPlayer());
                 if (debug) {
-                    log(String.format("Added new actor %d : %s", nextUnitNumber, getPlayer(nextUnitNumber)));
+                    log(String.format("Added new actor %d : %s", nextActorNumber, getPlayer(nextActorNumber)));
                 }
-                nextUnitNumber++;
+                nextActorNumber++;
             }
         }
         orderOfAction = sortPlayersIntoDecisionOrder();
@@ -193,7 +192,7 @@ to the current player, and then those for the opponent.
             if (activeUnit.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
             long id = activeUnit.getID();
             int actorNumber = unitIDToActorNumber.get(id);
-            if (!getPossibleActions(allActors.get(actorNumber - 1)).isEmpty())
+            if (!getPossibleActions(players.get(actorNumber - 1)).isEmpty())
                 actorNumbersInUse.add(actorNumber);
         }
         debug = mainDebug;      // to switch off logging when we call getPossibleActions()
