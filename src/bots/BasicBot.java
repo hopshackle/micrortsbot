@@ -58,26 +58,27 @@ public class BasicBot extends AIWithComputationBudget {
         // If there are still MicroAgents who have not decided, then pick randomly
         PlayerAction retValue = new PlayerAction();
         String stateAsString = fromState.getAsString();
-        boolean finished = false;
-        do {
+        List<Integer> decisionOrder = game.getDecisionOrder();
+        for (int actorRef : decisionOrder) {
+            int masterRef = game.getPlayerForActor(actorRef);
+            if (masterRef != playerID)
+                break;
             MCStatistics<MicroAgent> stats = tree.getStatisticsFor(stateAsString);
-            int pID = stats.getActorRef();
-            if (playerID == pID) {
-                MicroActionEnum action = (MicroActionEnum) tree.getBestAction(fromState, stats.getPossibleActions(), pID);
-                PlayerAction playerAction = action.getPlayerAction(action.getUnitAction(), game.getGameState());
-                // GameState can (I think) be the initial GameState before executing any actions
-                // All it will not include are the other moves made...but that's covered in the Merge
-                retValue = retValue.merge(playerAction);
-                Map<String, Integer> successorStates = stats.getSuccessorStatesFrom(action);
-                if (successorStates.keySet().size() > 1) {
-                    throw new AssertionError("With OpenLoop we only expect 1 successor state, not " + successorStates.keySet().size());
-                }
-                for (String s : successorStates.keySet())
-                    stateAsString = s;
-            } else {
-                finished = true;
+            MicroActionEnum action = (MicroActionEnum) tree.getBestAction(stateAsString, stats.getPossibleActions(), masterRef);
+            Unit u = game.getGameState().getUnit(game.getUnitIDForAgent(actorRef));
+            if (u.getPlayer() != playerID)
+                throw new AssertionError("Unit has incorrect player ID");
+            PlayerAction playerAction = action.getPlayerAction(u, game.getGameState());
+            // GameState can (I think) be the initial GameState before executing any actions
+            // All it will not include are the other moves made...but that's covered in the Merge
+            retValue = retValue.merge(playerAction);
+            Map<String, Integer> successorStates = stats.getSuccessorStatesFrom(action);
+            if (successorStates.keySet().size() > 1) {
+                throw new AssertionError("With OpenLoop we only expect 1 successor state, not " + successorStates.keySet().size());
             }
-        } while (!finished);
+            for (String s : successorStates.keySet())
+                stateAsString = s;
+        }
 
         return retValue;
     }

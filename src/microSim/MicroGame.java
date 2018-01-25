@@ -16,6 +16,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     private int id = idFountain.getAndIncrement();
     private GameState underlyingGameState;
     private Map<Long, Integer> unitIDToActorNumber;
+    private Map<Integer, Long> actorToUnitID;
     private Map<Integer, Integer> actorNumberToPlayer;
     private List<Integer> orderOfAction;
     private int currentActorIndex;
@@ -24,6 +25,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     public MicroGame(GameState gs) {
         underlyingGameState = gs;
         unitIDToActorNumber = new HashMap();
+        actorToUnitID = new HashMap();
         actorNumberToPlayer = new HashMap();
         setUpMasters();
         resetCurrentActors();
@@ -46,6 +48,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         currentActorIndex = master.currentActorIndex;
         nextActorNumber = master.nextActorNumber;
         unitIDToActorNumber = HopshackleUtilities.cloneMap(master.unitIDToActorNumber);
+        actorToUnitID = HopshackleUtilities.cloneMap(master.actorToUnitID);
         actorNumberToPlayer = HopshackleUtilities.cloneMap(master.actorNumberToPlayer);
         setUpMasters();
         for (MicroAgent p : master.players) {
@@ -85,6 +88,10 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         if (orderOfAction == null)
             return 1;
         return orderOfAction.get(currentActorIndex);
+    }
+
+    public List<Integer> getDecisionOrder() {
+        return HopshackleUtilities.cloneList(orderOfAction);
     }
 
     @Override
@@ -165,6 +172,7 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
                 newAgent.addParent(master);
                 // uses convention that masters contains the two PLayers in correct order
                 unitIDToActorNumber.put(u.getID(), nextActorNumber);
+                actorToUnitID.put(nextActorNumber, u.getID());
                 actorNumberToPlayer.put(nextActorNumber, u.getPlayer());
                 if (debug) {
                     log(String.format("Added new actor %d : %s", nextActorNumber, getPlayer(nextActorNumber)));
@@ -218,5 +226,12 @@ to the current player, and then those for the opponent.
     @Override
     public String toString() {
         return "MicroGame_" + String.valueOf(id);
+    }
+
+    public long getUnitIDForAgent(int ref) {
+        return actorToUnitID.get(ref);
+    }
+    public int getPlayerForActor(int ref){
+        return actorNumberToPlayer.get(ref);
     }
 }
