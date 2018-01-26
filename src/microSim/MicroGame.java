@@ -17,7 +17,6 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
     private GameState underlyingGameState;
     private Map<Long, Integer> unitIDToActorNumber;
     private Map<Integer, Long> actorToUnitID;
-    private Map<Integer, Integer> actorNumberToPlayer;
     private List<Integer> orderOfAction;
     private int currentActorIndex;
     private int nextActorNumber = 1;
@@ -26,7 +25,6 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         underlyingGameState = gs;
         unitIDToActorNumber = new HashMap();
         actorToUnitID = new HashMap();
-        actorNumberToPlayer = new HashMap();
         setUpMasters();
         resetCurrentActors();
         scoreCalculator = new MicroGameScorer();
@@ -49,7 +47,6 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
         nextActorNumber = master.nextActorNumber;
         unitIDToActorNumber = HopshackleUtilities.cloneMap(master.unitIDToActorNumber);
         actorToUnitID = HopshackleUtilities.cloneMap(master.actorToUnitID);
-        actorNumberToPlayer = HopshackleUtilities.cloneMap(master.actorNumberToPlayer);
         setUpMasters();
         for (MicroAgent p : master.players) {
             long id = p.getUnit().getID();
@@ -170,17 +167,16 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
                 masterAgents.put(newAgent, master);
                 // then set parent - this will trigger a BIRTH event
                 newAgent.addParent(master);
-                // uses convention that masters contains the two PLayers in correct order
+                // uses convention that masters contains the two Players in correct order
                 unitIDToActorNumber.put(u.getID(), nextActorNumber);
                 actorToUnitID.put(nextActorNumber, u.getID());
-                actorNumberToPlayer.put(nextActorNumber, u.getPlayer());
                 if (debug) {
                     log(String.format("Added new actor %d : %s", nextActorNumber, getPlayer(nextActorNumber)));
                 }
                 nextActorNumber++;
             }
         }
-        orderOfAction = sortPlayersIntoDecisionOrder();
+        orderOfAction = sortPlayersIntoDecisionOrder(0);
         currentActorIndex = 0;
         if (orderOfAction.isEmpty()) {
             throw new AssertionError("No actors to act in gameState");
@@ -191,7 +187,11 @@ public class MicroGame extends Game<MicroAgent, MicroActionEnum> {
 Sorts all ActorNumbers into the order in which they should decide. This starts with all Actors linked
 to the current player, and then those for the opponent.
  */
-    private List<Integer> sortPlayersIntoDecisionOrder() {
+    public static List<Integer> sortPlayersIntoDecisionOrder(GameState gs, int playerID) {
+        MicroGame temp = new MicroGame(gs);
+        return temp.sortPlayersIntoDecisionOrder(playerID);
+    }
+    public List<Integer> sortPlayersIntoDecisionOrder(int playerID) {
         List<Integer> actorNumbersInUse = new ArrayList();
         List<Unit> activeUnits = underlyingGameState.getUnits();
         boolean mainDebug = debug;
@@ -200,23 +200,26 @@ to the current player, and then those for the opponent.
             if (activeUnit.getPlayer() == -1) continue;  // a resource, or non-player controlled thingy
             long id = activeUnit.getID();
             int actorNumber = unitIDToActorNumber.get(id);
-            if (!getPossibleActions(players.get(actorNumber - 1)).isEmpty())
+            MicroAgent nextActor = players.get(actorNumber-1);
+            if (!getPossibleActions(nextActor).isEmpty())
                 actorNumbersInUse.add(actorNumber);
         }
-        debug = mainDebug;      // to switch off logging when we call getPossibleActions()
+        debug = mainDebug;
 
         Collections.sort(actorNumbersInUse, new Comparator<Integer>() {
             @Override
             public int compare(Integer o1, Integer o2) {
-                int differentPlayers = actorNumberToPlayer.get(o1) - actorNumberToPlayer.get(o2);
+                int differentPlayers = getPlayerForActor(o1) - getPlayerForActor(o2);
                 switch (differentPlayers) {
                     case 0: // is usual order within a player
                         return o1 - o2;
                     case 1:
                     case -1:
-                        return differentPlayers;
+                        // we want all units for playerID first in the array
+                        int retValue = playerID == 0 ? differentPlayers : -differentPlayers;
+                        return retValue;
                     default:
-                        throw new AssertionError("Unexpected player difference for " + actorNumberToPlayer.get(o1) + " against " + actorNumberToPlayer.get(o2));
+                        throw new AssertionError("Unexpected player difference for " + getPlayerForActor(o1) + " against " + getPlayerForActor(o2));
                 }
             }
         });
@@ -232,6 +235,7 @@ to the current player, and then those for the opponent.
         return actorToUnitID.get(ref);
     }
     public int getPlayerForActor(int ref){
-        return actorNumberToPlayer.get(ref);
+        MicroAgent master = getMasterOf(players.get(ref-1));
+        return masters.indexOf(master);
     }
 }

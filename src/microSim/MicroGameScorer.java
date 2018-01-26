@@ -30,7 +30,7 @@ public class MicroGameScorer implements GameScoreCalculator {
                 retValue[1 - winner] = -WIN_SCORE;
             } else {
                 for (int i = 0; i < 2; i++) {
-                    retValue[i] = valueFunction.evaluate(i, 1 - i, gs);
+                    retValue[i] = valueFunction.evaluate(i, 1 - i, gs) / 5.0;
                     if (retValue[i] > 0.80 * WIN_SCORE) retValue[i] = 0.8 * WIN_SCORE;
                     if (retValue[i] < -0.80 * WIN_SCORE) retValue[i] = -0.8 * WIN_SCORE;
                 }
