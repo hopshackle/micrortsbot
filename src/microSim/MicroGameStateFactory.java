@@ -11,7 +11,7 @@ public class MicroGameStateFactory implements StateFactory<MicroAgent> {
     public State<MicroAgent> getCurrentState(MicroAgent agent) {
         MicroGame game = (MicroGame) agent.getGame();
         int playerID = game.getPlayerForActor(game.getPlayerNumber(agent));
-        return new MicroGameState(game.getGameState(), playerID);
+        return new MicroGameState(game.getGameState().clone(), playerID);
     }
 
     @Override

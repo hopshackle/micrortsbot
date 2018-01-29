@@ -1,5 +1,6 @@
 package bots;
 
+import ai.abstraction.*;
 import ai.core.*;
 import hopshackle.simulation.*;
 import microSim.*;
@@ -11,16 +12,13 @@ import java.util.*;
 public class BasicBot extends AIWithComputationBudget {
 
     private OpenLoopStateFactory<MicroAgent> stateFactory = OpenLoopStateFactory.newInstanceGameLevelStates();
-    private BaseStateDecider<MicroAgent> rollout = new RandomDecider(stateFactory);
-    private BaseStateDecider<MicroAgent> opponentModel = new RandomDecider(stateFactory);
-    private MCTSMasterDecider<MicroAgent> decider = new MCTSMasterDecider(stateFactory, rollout, opponentModel);
-
-    {
-        decider.injectProperties(SimProperties.getDeciderProperties("GLOBAL"));
-    }
+    private BaseStateDecider<MicroAgent> rollout;
+    private BaseStateDecider<MicroAgent> opponentModel;
+    private MCTSMasterDecider<MicroAgent> decider;
 
     public BasicBot(int mt, int mi) {
         super(mt, mi);
+
     }
 
     public BasicBot(UnitTypeTable utt) {
@@ -34,6 +32,12 @@ public class BasicBot extends AIWithComputationBudget {
 
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
+        if (rollout == null) {
+            rollout = new AIDecider(new WorkerRush(gs.getUnitTypeTable()));
+            opponentModel = rollout;
+            decider = new MCTSMasterDecider(stateFactory, rollout, opponentModel);
+            decider.injectProperties(SimProperties.getDeciderProperties("GLOBAL"));
+        }
         if (!gs.canExecuteAnyAction(player)) return new PlayerAction();
 
         long start = System.currentTimeMillis();
